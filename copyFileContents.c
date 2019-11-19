@@ -17,7 +17,7 @@ int main(int argc, char** argv)
 {
 	char* endptr;
 	int fd1, fd2, l;
-	size_t s1, s2;
+	ssize_t s1, s2;
 
 	if (argc < 3) {
 	 	perror("Enter source and destination file names");                     
