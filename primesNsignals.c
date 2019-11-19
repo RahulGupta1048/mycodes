@@ -1,9 +1,10 @@
 /*
  *This code generates all the prime numbers upto a given "Max" argument and stores
- *them into a file at "~/path/to/storing/list", which is passed in the argument.
- *If signals SIGINT or SIGABRT interrupts the generation, it stores
+ *them into a file specified by the macro FILE.
+ *The generated prime numbers are simultaneously stored into the file using a separate thread
+ *If signals SIGINT or SIGABRT interrupts the generation, it completes storing
  *the already generated prime numbers in the aformentioned file and exits the process.
- *To execute : $ ./generatePrime ~/path/to/storing/list MaxValue
+ *To execute : $ ./generatePrime MaxValue
  */
 
 
@@ -131,11 +132,11 @@ int main(int argc, char** argv)
 	sigaction(SIGINT, &sact, NULL);
 	sigaction(SIGABRT, &sact, NULL);
 
-	if(argc < 3) {
+	if(argc < 2) {
 		max = 10000000;
 		}
 	else {
-		max = strtol(argv[2], &endptr, 0);
+		max = strtol(argv[1], &endptr, 0);
 		if(*endptr)
 		max = 10000000;
 		}
