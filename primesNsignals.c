@@ -1,6 +1,6 @@
 /*
- *This code generates all the prime numbers upto a given "Max" argument and stores
- *them into a file specified by the macro FILE.
+ *This code generates all the prime numbers upto a given "Max" argument and simultaneously stores
+ *them into a file specified by the macro FILE, using a separate thread.
  *If signals SIGINT or SIGABRT interrupts the generation, it completes storing
  *the already generated prime numbers in the aformentioned file and exits the process.
  *To execute : $ ./generatePrime MaxValue
