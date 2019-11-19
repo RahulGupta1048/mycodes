@@ -19,32 +19,56 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <errno.h>
+#include <pthread.h>
+#include <time.h>
 #include "functions.h"
+#include <unistd.h>
 
-int p[9999999]={0};
+static unsigned int p[9999999];
 static volatile sig_atomic_t sigCaught = 0;
+int generation_completed = 0;
+pthread_rwlock_t lock;
 
 
 /* Function to print prime numbers to a file */
-int printToFile(char* path)
+void *printToFile(void *m)
 {
-	int i, fd2, s2;
+	int i, fd2, s2, ret;
 	int* buf1; 
+	unsigned int *max = (unsigned int*)m;
+	char *path = FILE;
+	useconds_t sleep_time = 100;
 
+	printf("Max required = %u\n", *max);
 	fd2 = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0666);
 	if(fd2 == -1) {
 	 	perror("could not create destination file");
 	 	_exit(EXIT_FAILURE);
-	 	}
+	}
 	if((buf1 = (int*)malloc(sizeof(int))) == NULL) {
 		perror("cannot allocate memory");
 		if(close(fd2) == -1)
-	 		perror("couldn't close destination file");
-	 	_exit(EXIT_FAILURE);
-		}
+			perror("couldn't close destination file");
+		_exit(EXIT_FAILURE);
+	}
 	
 	i = 0;
-	while(p[i] > 0) {
+	while(1) {
+		while(p[i] == 0) {
+			ret = pthread_rwlock_rdlock(&lock);
+			if(ret != 0) {
+				perror("Failed to take lock\n");
+				continue;
+			}
+			if(generation_completed){
+				pthread_rwlock_unlock(&lock);
+				goto completed_writing;
+			}
+			else {
+				pthread_rwlock_unlock(&lock);
+				usleep(sleep_time);
+			}
+		}
 		*buf1 = p[i];
 		if((s2 = write(fd2, buf1, sizeof(int))) == -1) {
 			free(buf1);
@@ -52,15 +76,16 @@ int printToFile(char* path)
 			if(close(fd2) == -1)
 	 			perror("couldn't close destination file");
 			_exit(EXIT_FAILURE);
-			}
-		i++;
 		}
+		i++;
+	}
+completed_writing:
 	free(buf1);
 	if(close(fd2) == -1){
 	 	perror("couldn't close destination file");
 	 	_exit(EXIT_FAILURE);
 	 	}
-	return 0; 
+	pthread_exit((void *)0);
 }
 
 
@@ -74,15 +99,19 @@ sigCaught = 1;
 
 
 /* prime generator Function */
-int primeGenerator(int y)
+int primeGenerator(unsigned int y)
 {
 	int i, temp, flag, lim, k;
 	p[0] = 2;
 	k = 1;
 	  
 	for(i = 3; i <= y; i++){
-		if(sigCaught)
+		if(sigCaught) {
+			pthread_rwlock_wrlock(&lock);
+			generation_completed = 1;
+			pthread_rwlock_unlock(&lock);
 			return -1;
+		}
 		temp = 0;
 		flag = 0; 
 		lim = sqrt(i);
@@ -90,40 +119,46 @@ int primeGenerator(int y)
 			if(i % p[temp] == 0) {
 				flag = 1;
 				break;
-				}
+			}
 			temp++;
-			} 
+		}
 		if(flag == 0) {
 			p[k] = i;
 			k++;
-			}
-		} 
+		}
+	}
+	pthread_rwlock_wrlock(&lock);
+	generation_completed = 1;
+	pthread_rwlock_unlock(&lock);
 	return 0;
 }
 
 
 int main(int argc, char** argv)
 {
-	sigset_t sigset;
-	sigset_t sigsetTemp;
+	sigset_t sigset, sigsetTemp;
 	struct sigaction  sact;
 	char* endptr;
-	int max;
+	unsigned int max;
+	int ret;
+	clock_t begin, end;
+	double time_taken;
+	pthread_t tid;
 
 	sigfillset(&sigset);
-	sigdelset(&sigset, SIGHUP);
 	sigdelset(&sigset, SIGINT);
-	sigdelset(&sigset, SIGQUIT);
 	sigdelset(&sigset, SIGABRT);
-	sigdelset(&sigset, SIGTERM);
-	sigdelset(&sigset, SIGSTOP);
-	sigdelset(&sigset, SIGTSTP);
+
 	sigfillset(&sigsetTemp);
 
+	ret = pthread_rwlock_init(&lock, NULL);
+	if(ret != 0)
+		perror("RWlock initialize ");
+
 	if(sigprocmask(SIG_SETMASK, &sigset, NULL) == -1) {
-		perror("couldn't establish process mask");
+		perror("couldn't establish process mask\n");
 		exit(EXIT_FAILURE);
-		}
+	}
 
 	sact.sa_flags = 0;
 	sact.sa_handler = handler;
@@ -131,22 +166,28 @@ int main(int argc, char** argv)
 	sigaction(SIGINT, &sact, NULL);
 	sigaction(SIGABRT, &sact, NULL);
 
-	if(argc < 2) {
-		max = 10000000;
-		}
+	if(argc < 2)
+		max = DEFAULT_MAX;
+
 	else {
-		max = strtol(argv[1], &endptr, 0);
+		max = strtoul(argv[1], &endptr, 0);
 		if(*endptr)
-		max = 10000000;
-		}
+		max = DEFAULT_MAX;
+	}
+	if(pthread_create(&tid, NULL, printToFile, &max) < 0)
+		return -1;
+	begin = clock();
 	if(primeGenerator(max) == -1) 
 		perror("couldn't complete generation");
 	if(sigprocmask(SIG_SETMASK, &sigsetTemp, NULL) == -1)
 		perror("couldn't establish temporary process mask");
-	printToFile(FILE);
+	pthread_join(tid, NULL);
+	end = clock();
 	if(sigprocmask(SIG_SETMASK, &sigset, NULL) == -1)
 		perror("couldn't restore process mask");
-
+	time_taken = (double)(end - begin)/CLOCKS_PER_SEC;
 	readFromFile(FILE);
+	printf("\n Time taken = %f", time_taken);
+	return 0;
 }
 

@@ -6,7 +6,7 @@ CC=gcc
 CFLAGS= -O2 -Wall
 CFLAGS_DBG= -g -ggdb -O0 -Wall -Wextra -DDEBUG
 
-LINKIN := -lm
+LINKIN := -lm -pthread
 
 all: ${ALL}
 all_debug: ${ALL_DBG}
