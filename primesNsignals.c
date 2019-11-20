@@ -24,7 +24,7 @@
 #include "functions.h"
 #include <unistd.h>
 
-static unsigned int p[9999999];
+unsigned int *p;
 static volatile sig_atomic_t sigCaught = 0;
 int generation_completed = 0;
 pthread_rwlock_t lock;
@@ -34,7 +34,7 @@ pthread_rwlock_t lock;
 void *printToFile(void *m)
 {
 	int i, fd2, s2, ret;
-	int* buf1; 
+	unsigned int* buf1;
 	unsigned int *max = (unsigned int*)m;
 	char *path = FILE;
 	useconds_t sleep_time = 100;
@@ -45,7 +45,7 @@ void *printToFile(void *m)
 	 	perror("could not create destination file");
 	 	_exit(EXIT_FAILURE);
 	}
-	if((buf1 = (int*)malloc(sizeof(int))) == NULL) {
+	if((buf1 = (unsigned int*)malloc(sizeof(unsigned int))) == NULL) {
 		perror("cannot allocate memory");
 		if(close(fd2) == -1)
 			perror("couldn't close destination file");
@@ -145,6 +145,11 @@ int main(int argc, char** argv)
 	double time_taken;
 	pthread_t tid;
 
+	p = (unsigned int*)malloc(100000000*sizeof(unsigned int));
+	if(p == NULL) {
+		printf("Couldn't allocate memory for array");
+		return -1;
+	}
 	sigfillset(&sigset);
 	sigdelset(&sigset, SIGINT);
 	sigdelset(&sigset, SIGABRT);
